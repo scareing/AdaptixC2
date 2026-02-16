@@ -17,9 +17,6 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        qt-version: ['6.7.0']
     
     steps:
       - name: Checkout code
@@ -32,37 +29,55 @@ jobs:
         with:
           arch: x64
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+      - name: Install CMake
+        uses: kitware/cmake-action@v2
         with:
-          version: ${{ matrix.qt-version }}
-          target: 'desktop'
-          arch: 'win64_msvc2022_64'
-          modules: 'qtwebsockets'
-          cache: true
+          cmake-version: '3.28'
+
+      - name: Install Qt6 (using aqt)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install aqtinstall
+          python -m aqt install-qt windows desktop 6.6.0 win64_msvc2022_64 --outputdir D:\a\AdaptixC2\Qt
+        shell: pwsh
 
       - name: Install OpenSSL
         run: choco install openssl -y
 
-      - name: Install CMake
-        run: choco install cmake -y
+      - name: Set Qt environment
+        run: |
+          echo "Qt6_DIR=D:\a\AdaptixC2\Qt\6.6.0\msvc2022_64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "D:\a\AdaptixC2\Qt\6.6.0\msvc2022_64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
 
       - name: Configure with CMake
         working-directory: AdaptixClient
         run: |
-          cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release .
+          cmake -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_PREFIX_PATH="D:\a\AdaptixC2\Qt\6.6.0\msvc2022_64" `
+            -DCMAKE_BUILD_TYPE=Release .
+        shell: pwsh
 
       - name: Build project
         working-directory: AdaptixClient
         run: |
           cmake --build . --config Release --parallel 4
 
+      - name: List build output
+        run: |
+          Get-ChildItem -Path "AdaptixClient\Release" -Recurse
+        shell: pwsh
+
       - name: Collect artifacts
         run: |
           mkdir -p dist
-          if exist "AdaptixClient\Release\AdaptixClient.exe" (
-            copy "AdaptixClient\Release\AdaptixClient.exe" "dist\AdaptixClient.exe"
-          )
+          if (Test-Path "AdaptixClient\Release\AdaptixClient.exe") {
+            Copy-Item "AdaptixClient\Release\AdaptixClient.exe" "dist\AdaptixClient.exe"
+          } else {
+            Write-Host "Looking for executable in subdirectories..."
+            Get-ChildItem -Path "AdaptixClient" -Filter "*.exe" -Recurse
+          }
+        shell: pwsh
 
       - name: Upload Artifacts
         if: success()
