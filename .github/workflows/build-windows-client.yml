@@ -5,9 +5,6 @@ on:
     branches:
       - main
       - dev
-    paths:
-      - 'AdaptixClient/**'
-      - '.github/workflows/build-windows-client.yml'
   pull_request:
     branches:
       - main
@@ -27,48 +24,35 @@ jobs:
         with:
           arch: x64
 
-      - name: Install dependencies via Chocolatey
+      - name: Install tools
         run: |
-          choco install cmake -y
-          choco install openssl -y
+          choco install cmake openssl -y
         shell: cmd
 
-      - name: Install Qt6
+      - name: Download Qt6
         run: |
-          python -m pip install --upgrade pip
           python -m pip install aqtinstall
-          python -m aqt install-qt windows desktop 6.6.0 win64_msvc2022_64 --outputdir C:\Qt
+          python -m aqt install-qt windows desktop --outputdir C:\Qt 6.6.1 win64_msvc2022_64
         shell: powershell
 
-      - name: Set environment variables
+      - name: Set Qt Path
         run: |
-          echo "Qt6_DIR=C:\Qt\6.6.0\msvc2022_64" >> $env:GITHUB_ENV
-          echo "C:\Qt\6.6.0\msvc2022_64\bin" >> $env:GITHUB_PATH
+          echo "Qt6_DIR=C:\Qt\6.6.1\msvc2022_64\lib\cmake\Qt6" >> $env:GITHUB_ENV
         shell: powershell
 
-      - name: Create build directory
+      - name: Configure CMake
         run: |
-          cd AdaptixClient
           mkdir build
           cd build
-
-      - name: Configure with CMake
-        working-directory: AdaptixClient\build
-        run: |
           cmake -G "Visual Studio 17 2022" -A x64 `
-            -DCMAKE_PREFIX_PATH="C:\Qt\6.6.0\msvc2022_64" `
-            ..
+            -DQt6_DIR="C:\Qt\6.6.1\msvc2022_64\lib\cmake\Qt6" `
+            ../AdaptixClient
         shell: powershell
 
-      - name: Build project
-        working-directory: AdaptixClient\build
+      - name: Build
         run: |
+          cd build
           cmake --build . --config Release
-        shell: cmd
-
-      - name: Check build output
-        run: |
-          dir AdaptixClient\build\Release
         shell: cmd
 
       - name: Upload Artifacts
@@ -76,13 +60,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AdaptixClient-Windows-x64
-          path: AdaptixClient\build\Release\*.exe
+          path: build\Release\AdaptixClient.exe
           retention-days: 30
-
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: AdaptixClient\build\Release\AdaptixClient.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
