@@ -66,7 +66,7 @@ jobs:
 
       - name: Upload Artifacts
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: AdaptixClient-Windows-x64-${{ github.run_number }}
           path: dist/
@@ -80,4 +80,4 @@ jobs:
           draft: false
           prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}c
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
