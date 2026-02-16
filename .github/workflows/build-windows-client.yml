@@ -21,78 +21,68 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
-      - name: Install CMake
-        uses: kitware/cmake-action@v2
-        with:
-          cmake-version: '3.28'
+      - name: Install dependencies via Chocolatey
+        run: |
+          choco install cmake -y
+          choco install openssl -y
+        shell: cmd
 
-      - name: Install Qt6 (using aqt)
+      - name: Install Qt6
         run: |
           python -m pip install --upgrade pip
           python -m pip install aqtinstall
-          python -m aqt install-qt windows desktop 6.6.0 win64_msvc2022_64 --outputdir D:\a\AdaptixC2\Qt
-        shell: pwsh
+          python -m aqt install-qt windows desktop 6.6.0 win64_msvc2022_64 --outputdir C:\Qt
+        shell: powershell
 
-      - name: Install OpenSSL
-        run: choco install openssl -y
-
-      - name: Set Qt environment
+      - name: Set environment variables
         run: |
-          echo "Qt6_DIR=D:\a\AdaptixC2\Qt\6.6.0\msvc2022_64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "D:\a\AdaptixC2\Qt\6.6.0\msvc2022_64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        shell: pwsh
+          echo "Qt6_DIR=C:\Qt\6.6.0\msvc2022_64" >> $env:GITHUB_ENV
+          echo "C:\Qt\6.6.0\msvc2022_64\bin" >> $env:GITHUB_PATH
+        shell: powershell
+
+      - name: Create build directory
+        run: |
+          cd AdaptixClient
+          mkdir build
+          cd build
 
       - name: Configure with CMake
-        working-directory: AdaptixClient
+        working-directory: AdaptixClient\build
         run: |
           cmake -G "Visual Studio 17 2022" -A x64 `
-            -DCMAKE_PREFIX_PATH="D:\a\AdaptixC2\Qt\6.6.0\msvc2022_64" `
-            -DCMAKE_BUILD_TYPE=Release .
-        shell: pwsh
+            -DCMAKE_PREFIX_PATH="C:\Qt\6.6.0\msvc2022_64" `
+            ..
+        shell: powershell
 
       - name: Build project
-        working-directory: AdaptixClient
+        working-directory: AdaptixClient\build
         run: |
-          cmake --build . --config Release --parallel 4
+          cmake --build . --config Release
+        shell: cmd
 
-      - name: List build output
+      - name: Check build output
         run: |
-          Get-ChildItem -Path "AdaptixClient\Release" -Recurse
-        shell: pwsh
-
-      - name: Collect artifacts
-        run: |
-          mkdir -p dist
-          if (Test-Path "AdaptixClient\Release\AdaptixClient.exe") {
-            Copy-Item "AdaptixClient\Release\AdaptixClient.exe" "dist\AdaptixClient.exe"
-          } else {
-            Write-Host "Looking for executable in subdirectories..."
-            Get-ChildItem -Path "AdaptixClient" -Filter "*.exe" -Recurse
-          }
-        shell: pwsh
+          dir AdaptixClient\build\Release
+        shell: cmd
 
       - name: Upload Artifacts
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: AdaptixClient-Windows-x64-${{ github.run_number }}
-          path: dist/
+          name: AdaptixClient-Windows-x64
+          path: AdaptixClient\build\Release\*.exe
           retention-days: 30
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/AdaptixClient.exe
-          draft: false
-          prerelease: false
+          files: AdaptixClient\build\Release\AdaptixClient.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
